@@ -3,6 +3,7 @@ import re
 from time import sleep
 from colorama import Fore, Style
 import pytest
+from numexpr.necompiler import double
 from selenium import webdriver
 from selenium.common import NoSuchElementException
 from selenium.webdriver import Keys, ActionChains
@@ -150,10 +151,10 @@ def alter_year_in_all_ind(driver):
 
 # 百分数转为小数
 def percent_to_float(percent_str):
-    return float(percent_str[:-1]) / 100
+    return double(percent_str[:-1]) / 100
 
-def is_equal(float1, float2, tolerance=1e-6):
-    return abs(float(float2) - float(float1) < tolerance)
+def is_equal(float1, float2, tolerance=1e-7):
+    return abs(double(float2) - double(float1) < tolerance)
 
 def test_jump_to_target_school(driver):
     global school_name
@@ -221,7 +222,12 @@ def test_data_overall(driver):
     try:
         driver.find_element(By.XPATH, ind_select).click()
     except NoSuchElementException:
-        assert False, f"该指标为非排名指标,总体定位页面无该数据"
+        assert False, (
+        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        f"{Fore.RED}总体定位页面核验结果" + Style.RESET_ALL + "\n"
+        f"{Fore.RED}状态: {Fore.RED}✖ 该指标为非排名指标,总体定位页面无该数据{Style.RESET_ALL}\n"
+        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+    )
         # raise AssertionError("该指标为非排名指标,总体定位页面无该数据")
 
         # pytest.fail("该指标为非排名指标,总体定位页面无该数据", pytrace=False)
@@ -239,24 +245,38 @@ def test_data_overall(driver):
         row_data = [extract_data(cell) for cell in cells]
         # print(row_data)
         row_dict = dict(zip(headers, row_data))
+        value_page = row_dict["指标数据"]
         if row_dict["指标数据"].endswith("%"):
             row_dict["指标数据"] = percent_to_float(row_dict["指标数据"])
+        if row_dict["指标数据"] == '':
+            row_dict["指标数据"] = 0
         data_dict_list.append(row_dict)
         print(row_dict)
 
-    assert year == data_dict_list[0][
-        "监测年份"], f"检测年份有误,页面中为{data_dict_list[0]["监测年份"]},数据更新检测年份为{year},无法核验数据!"
-    assert is_equal(value, data_dict_list[0]["指标数据"]), f"指标数据有误!请查找问题原因!!"
+    assert year == data_dict_list[0]["监测年份"], (
+        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        f"{Fore.RED}总体定位页面核验结果" + Style.RESET_ALL + "\n"
+        f"{Fore.RED}状态: {Fore.RED}✖ 年份有误！{Style.RESET_ALL}\n"
+        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+    )
+    assert is_equal(value, data_dict_list[0]["指标数据"]), (
+        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        f"{Fore.RED}总体定位页面核验结果" + Style.RESET_ALL + "\n"
+        f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
+        f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
+        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+    )
     # print("总体定位页面" + indicator + "指标数据更新核验完毕,未发现问题")
     '''输出'''
     # 分隔线
     print(Fore.BLUE + "=" * 80 + Style.RESET_ALL)
-    # 标题
-    print(Fore.GREEN + "总体定位页面" + Style.RESET_ALL)
     # 内容
     print(
+        f"{Fore.RED}总体定位页面" + Style.RESET_ALL + "\n"
         f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}页面数据: {Fore.CYAN}{data_dict_list[0]["指标数据"]}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}状态: {Fore.GREEN}✔ 未发现问题~{Style.RESET_ALL}"
     )
@@ -326,22 +346,30 @@ def test_data_all_ind(driver):
 
     # 存为字典
     data_dict = dict(zip(headers, values))
+    value_page = data_dict[school_name]
     if data_dict[school_name].endswith("%"):
         data_dict[school_name] = percent_to_float(data_dict[school_name])
     print(data_dict)
 
     # 数据核验
-    assert is_equal(value, data_dict[school_name]), f"指标数据有误!页面数据为:{data_dict[school_name]},校对数据为:{value}.请查找问题原因!!"
+    assert is_equal(value, data_dict[school_name]), (
+        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        f"{Fore.RED}全部指标页面" + Style.RESET_ALL + "\n"
+        f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
+        f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
+        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+    )
     # print("全部指标页面" + indicator + "指标数据更新核验完毕,页面数据为:" + str(data_dict[school_name]) + ",校对数据为:" + value + ",未发现问题~")
     '''输出'''
     # 分隔线
     print(Fore.BLUE + "=" * 80 + Style.RESET_ALL)
-    # 标题
-    print(Fore.GREEN + "全部指标页面" + Style.RESET_ALL)
     # 内容
     print(
+        f"{Fore.RED}全部指标页面" + Style.RESET_ALL + "\n"
         f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}页面数据: {Fore.CYAN}{str(data_dict[school_name])}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}状态: {Fore.GREEN}✔ 未发现问题~{Style.RESET_ALL}"
     )
@@ -382,25 +410,43 @@ def test_data_ind_check(driver):
                                                                    "//td[contains(@class, 'vxe-body--column')]//*[self::div or self::span][not(*) and normalize-space()]")]
     # values = driver.find_elements(By.XPATH,"//td[contains(@class, 'vxe-body--column')]//*[self::div or self::span][not(*) and normalize-space() and not(contains(., '重置'))]")
     # print(values)
+    if len(values) < len(headers):
+        values += ["0"] * (len(headers) - len(values))
+    # print(headers)
+    # print(values)
     # 存为字典
     data_dict = dict(zip(headers, values))
+    print(data_dict)
+    value_page = data_dict[year]
     if data_dict[year].endswith("%"):
         data_dict[year] = percent_to_float(data_dict[year])
-    # print(data_dict)
+    print(data_dict)
 
     # 核验数据正确性
-    assert year in data_dict, f"未找到数据项,是否未更新?"
-    assert is_equal(value, data_dict[year]), f"指标数据有误!页面数据为:{data_dict[year]},校对数据为:{value}.请查找问题原因!!"
+    assert year in data_dict, (
+        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        f"{Fore.RED}指标查看页面核验结果" + Style.RESET_ALL + "\n"
+        f"{Fore.RED}状态: {Fore.RED}✖ 发现问题!未找到数据项,是否未更新?{Style.RESET_ALL}\n"
+        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+    )
+    assert is_equal(value, data_dict[year]), (
+        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        f"{Fore.RED}指标查看页面核验结果" + Style.RESET_ALL + "\n"
+        f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
+        f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
+        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+    )
     # print("指标查看页面" + indicator + "指标数据更新核验完毕,页面数据为:" + str(data_dict[year]) + ",校对数据为:" + value + ",未发现问题~")
     '''输出'''
     # 分隔线
     print(Fore.BLUE + "=" * 80 + Style.RESET_ALL)
-    # 标题
-    print(Fore.GREEN + "指标查看页面" + Style.RESET_ALL)
     # 内容
     print(
+        f"{Fore.RED}指标查看页面" + Style.RESET_ALL + "\n"
         f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}页面数据: {Fore.CYAN}{str(data_dict[year])}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}状态: {Fore.GREEN}✔ 未发现问题~{Style.RESET_ALL}"
     )
@@ -448,7 +494,7 @@ def test_data_feedback(driver):
                                                                    "//td[contains(@class, 'vxe-body--column')]//*[self::div or self::span][(not(*) or @title='未公布') and not(contains(., '重置'))]")]
     for i in range(len(values)):
         if values[i] == "":
-            values[i] = "未公布"
+            values[i] = "0"
     # print(values)
 
     # 提取当前监测年份数据
@@ -460,22 +506,35 @@ def test_data_feedback(driver):
 
     # 存为字典
     data_dict = dict(zip(headers, values))
+    # 判断前端的文字为“数据反馈”（0）还是“数据填报”（1）
+    flag = 0
+    value_page = data_dict["监测年份"]
     if data_dict["监测年份"].endswith("%"):
         data_dict["监测年份"] = percent_to_float(data_dict["监测年份"])
+    if data_dict["监测年份"] == "未采集到，请填报":
+        data_dict["监测年份"] = 0
+        flag = 1
     # print(data_dict)
 
     # 总页面数据核验
-    assert is_equal(value, data_dict["监测年份"]), f"指标数据有误!页面数据为:{data_dict["监测年份"]},校对数据为:{value}.请查找问题原因!!"
+    assert is_equal(value, data_dict["监测年份"]),  (
+        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        f"{Fore.RED}数据反馈页面" + Style.RESET_ALL + "\n"
+        f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
+        f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
+        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL
+    )
     # print("数据反馈页面" + indicator + "指标数据更新核验完毕,页面数据为:" + str(data_dict["监测年份"]) + ",校对数据为:" + value + ",未发现问题~")
     '''输出'''
     # 分隔线
     print(Fore.BLUE + "=" * 80 + Style.RESET_ALL)
-    # 标题
-    print(Fore.GREEN + "数据反馈页面" + Style.RESET_ALL)
     # 内容
     print(
+        f"{Fore.RED}数据反馈页面" + Style.RESET_ALL + "\n"
         f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}页面数据: {Fore.CYAN}{data_dict["监测年份"]}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}状态: {Fore.GREEN}✔ 未发现问题~{Style.RESET_ALL}"
     )
@@ -483,7 +542,10 @@ def test_data_feedback(driver):
     print(Fore.BLUE + "=" * 80 + Style.RESET_ALL)
 
     # 数据反馈操作页面数据核验
-    operation = f"//span[contains(.,'数据反馈') and @class='link-a']"
+    if flag == 0:
+        operation = f"//span[contains(.,'数据反馈') and @class='link-a']"
+    else:
+        operation = f"//span[@class='link-a color-warn']"
     driver.find_element(By.XPATH, operation).click()
 
     # 提取数据
@@ -498,26 +560,35 @@ def test_data_feedback(driver):
             val = " ".join(td.text.strip() for td in tds[1:])  # 其余列合并为值
             data_dict_2[key] = val
 
+    # 处理数据
+    value_page = data_dict_2["当前数据"]
     if data_dict_2["当前数据"].endswith("%"):
         data_dict_2["当前数据"] = percent_to_float(data_dict_2["当前数据"])
+    if data_dict_2["当前数据"] == "未采集到，请填报":
+        data_dict_2["当前数据"] = 0
+
     print(data_dict_2)  # 输出字典
-    assert is_equal(value, data_dict_2["当前数据"]), f"指标数据有误!页面数据为:{data_dict_2["当前数据"]},校对数据为:{value}.请查找问题原因!!"
+    assert is_equal(value, data_dict_2["当前数据"]), (
+        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        f"{Fore.RED}数据反馈页面核验结果" + Style.RESET_ALL + "\n"
+        f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}页面数据: {Fore.CYAN}{data_dict_2['当前数据']}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
+        f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
+        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+    )
     # print("数据反馈页面" + indicator + "指标数据更新核验完毕,页面数据为:" + str(data_dict_2[
     #     "当前数据"]) + ",校对数据为:" + value + ",未发现问题~")
 
     # 分隔线
-    print(Fore.BLUE + "=" * 80 + Style.RESET_ALL)
-
-    # 标题
-    print(Fore.GREEN + "数据反馈页面核验结果" + Style.RESET_ALL)
-
+    print(Fore.BLUE + "=" * 80 + Style.RESET_ALL  )
     # 内容
     print(
+        f"{Fore.RED}数据反馈页面核验结果" + Style.RESET_ALL + "\n"
         f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}页面数据: {Fore.CYAN}{data_dict_2['当前数据']}{Style.RESET_ALL}\n"
+        f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}状态: {Fore.GREEN}✔ 未发现问题~{Style.RESET_ALL}"
     )
-
     # 分隔线
     print(Fore.BLUE + "=" * 80 + Style.RESET_ALL)
