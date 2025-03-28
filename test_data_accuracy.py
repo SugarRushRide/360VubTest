@@ -22,6 +22,9 @@ year = os.getenv("YEAR")
 # value = "1"
 # year = "2023"
 
+# 页面年份数据
+year_on_page = None
+
 # 打印参数（可选，用于调试）
 # print(f"Indicator: {indicator}, School Name: {school_name}, Value: {value}, Year: {year}")
 
@@ -337,9 +340,21 @@ def test_data_overall(driver):
         data_dict_list.append(row_dict)
         print(row_dict)
 
+    # 存页面年份
+    global year_on_page
+    year_on_page = data_dict_list[0]["监测年份"]
+
     # 年份处理
     if "截至" in data_dict_list[0]["监测年份"]:
         check_year_before_deadline(driver, data_dict_list[0]["监测年份"])
+    elif "-" in year_on_page:
+        start, end = year_on_page.split("-")
+        if (year < start) or (end < year):
+            assert year == data_dict_list[0]["监测年份"], (
+            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"{Fore.RED}总体定位页面核验结果" + Style.RESET_ALL + "\n"
+            f"{Fore.RED}状态: {Fore.RED}✖ 数据更新年份为{year},页面年份为{data_dict_list[0]["监测年份"]},无法进行核验！{Style.RESET_ALL}\n"
+            )
     # 监测年份与数据年份不一致
     else:
         assert year == data_dict_list[0]["监测年份"], (
