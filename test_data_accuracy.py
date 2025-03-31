@@ -179,7 +179,10 @@ def check_year(driver):
 def check_year_before_deadline(driver, current_year):
     global year
     deadline = int(current_year[2:6])
-    assert int(year) <= deadline, f"目标年份{year}不在截至日期内, 请查看数据是否尚未更新或是否出现其他异常!"
+    assert int(year) <= deadline, (
+        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        f"目标年份{year}不在截至日期内, 请查看数据是否尚未更新或是否出现其他异常!"
+    )
     year = current_year
     return current_year
 
@@ -211,7 +214,10 @@ def alter_year_range_section(driver):
     target_year_path = f"//div//ul[@class='picker-date-list']//span[contains(text(), '{year}')]"
     year_element = driver.find_element(By.XPATH, target_year_path)
     class_value = year_element.get_attribute("class")
-    assert "disable-item" not in class_value, f"目标年份{year}不可选,数据尚未更新或出现其他异常!"
+    assert "disable-item" not in class_value, (
+        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        f"目标年份{year}不可选,数据尚未更新或出现其他异常!"
+    )
     # 开始与结束选择同一年份
     driver.find_element(By.XPATH, target_year_path).click()
     driver.find_element(By.XPATH, target_year_path).click()
@@ -226,7 +232,10 @@ def alter_year_point_section(driver):
     year_element = driver.find_element(By.XPATH, target_year_path)
     class_value = year_element.get_attribute("class")
     # 若目标年份为disable-item,抛出异常
-    assert "disable-item" not in class_value, f"目标年份{year}不可选,数据尚未更新或出现其他异常!"
+    assert "disable-item" not in class_value, (
+        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        f"目标年份{year}不可选,数据尚未更新或出现其他异常!"
+    )
     driver.find_element(By.XPATH, target_year_path).click()
     driver.find_element(By.XPATH, window).click()
     return year
@@ -283,7 +292,10 @@ def test_jump_to_target_school(driver):
     expected_url = "https://vub-3f3ab907.gaojidata.com/overview"
     # 正式环境
     # expected_url = "https://vub.gaojidata.com/overview"
-    assert driver.current_url == expected_url, f"URL错误,跳转失败,当前 URL: {driver.current_url}"
+    assert driver.current_url == expected_url, (
+        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        f"URL错误,跳转失败,当前 URL: {driver.current_url}"
+    )
     print("成功跳转至" + school_name)
 
 
@@ -299,7 +311,13 @@ def test_data_overall(driver):
     # 用ActionChains
     ActionChains(driver).move_to_element(ind_filter).click().perform()
     input_ind = f"//input[@placeholder='请输入搜索关键字']"
-    WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.XPATH, input_ind)))
+    try:
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, input_ind)))
+    except:
+        assert False, (
+            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"总体定位页面加载失败!"
+        )
     search = driver.find_element(By.XPATH, input_ind)
     search.send_keys(indicator)
     search.send_keys(Keys.ENTER)
@@ -310,10 +328,10 @@ def test_data_overall(driver):
         driver.find_element(By.XPATH, ind_select).click()
     except NoSuchElementException:
         assert False, (
-        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-        f"{Fore.RED}总体定位页面核验结果" + Style.RESET_ALL + "\n"
-        f"{Fore.RED}状态: {Fore.RED}✖ 该指标为非排名指标,总体定位页面无该数据{Style.RESET_ALL}\n"
-        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"{Fore.RED}总体定位页面核验结果" + Style.RESET_ALL + "\n"
+            f"{Fore.RED}状态: {Fore.RED}✖ 该指标为非排名指标,总体定位页面无该数据{Style.RESET_ALL}\n"
+            # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
     )
         # raise AssertionError("该指标为非排名指标,总体定位页面无该数据")
 
@@ -351,9 +369,9 @@ def test_data_overall(driver):
         start, end = year_on_page.split("-")
         if (year < start) or (end < year):
             assert year == data_dict_list[0]["监测年份"], (
-            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-            f"{Fore.RED}总体定位页面核验结果" + Style.RESET_ALL + "\n"
-            f"{Fore.RED}状态: {Fore.RED}✖ 数据更新年份为{year},页面年份为{data_dict_list[0]["监测年份"]},无法进行核验！{Style.RESET_ALL}\n"
+                f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+                f"{Fore.RED}总体定位页面核验结果" + Style.RESET_ALL + "\n"
+                f"{Fore.RED}状态: {Fore.RED}✖ 数据更新年份为{year},页面年份为{data_dict_list[0]["监测年份"]},无法进行核验！{Style.RESET_ALL}\n"
             )
     # 监测年份与数据年份不一致
     else:
@@ -367,7 +385,7 @@ def test_data_overall(driver):
     # 数据核验
     assert is_equal(value, data_dict_list[0]["指标数据"]), (
         f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-        f"{Fore.RED}总体定位页面核验结果" + Style.RESET_ALL + "\n"
+        f"{Fore.YELLOW}总体定位页面核验结果" + Style.RESET_ALL + "\n"
         f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
@@ -380,8 +398,10 @@ def test_data_overall(driver):
     print(Fore.BLUE + "=" * 80 + Style.RESET_ALL)
     # 内容
     print(
-        f"{Fore.RED}总体定位页面" + Style.RESET_ALL + "\n"
+        f"{Fore.YELLOW}总体定位页面" + Style.RESET_ALL + "\n"
         f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
+        # f"{Fore.GREEN}页面年份: {Fore.CYAN}{data_dict_list[0]["监测年份"]}{Style.RESET_ALL}\n"
+        # f"{Fore.GREEN}核验数据年份: {Fore.CYAN}{year}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
         f"{Fore.GREEN}状态: {Fore.GREEN}✔ 未发现问题~{Style.RESET_ALL}"
