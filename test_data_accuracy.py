@@ -301,7 +301,13 @@ def test_jump_to_target_school(driver):
 
 def test_data_overall(driver):
     ind_chose = f"//span[span[contains(text(), '指标')]]/span[@class='filter-icon']/*"
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, ind_chose)))
+    try:
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, ind_chose)))
+    except:
+        assert False, (
+            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"总体定位页面加载失败!"
+        )
 
     # 指标搜索
     ind_filter = driver.find_element(By.XPATH, ind_chose)
@@ -311,13 +317,7 @@ def test_data_overall(driver):
     # 用ActionChains
     ActionChains(driver).move_to_element(ind_filter).click().perform()
     input_ind = f"//input[@placeholder='请输入搜索关键字']"
-    try:
-        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, input_ind)))
-    except:
-        assert False, (
-            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-            f"总体定位页面加载失败!"
-        )
+    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, input_ind)))
     search = driver.find_element(By.XPATH, input_ind)
     search.send_keys(indicator)
     search.send_keys(Keys.ENTER)
@@ -415,7 +415,13 @@ def test_data_all_ind(driver):
     global school_name
     global indicator
     all_ind = f"//*[@id='sub_menu_3_$$_univ-data-popup']/div[2]/li/span/div/div"
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, all_ind)))
+    try:
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, all_ind)))
+    except:
+        assert False, (
+            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"全部指标页面加载失败!"
+        )
 
     # 跳转至全部指标页面
     driver.find_element(By.XPATH, all_ind).click()
@@ -516,8 +522,13 @@ def test_data_ind_check(driver):
     global year
     global indicator
     ind_check = f"//*[@id='sub_menu_3_$$_univ-data-popup']/div[1]/li/span"
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, ind_check)))
-
+    try:
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, ind_check)))
+    except:
+        assert False, (
+            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"指标查看页面加载失败!"
+        )
     # 跳转至指标查看页面
     driver.find_element(By.XPATH, ind_check).click()
     ind_chose = f"//input[@placeholder='搜索/选择']"
@@ -608,7 +619,15 @@ def test_data_feedback(driver):
     driver.find_element(By.XPATH, feedback).click()
     # ind_filter = f"/html/body/div[1]/section/section/main/div/div[2]/div[1]/div/div/div/div[1]/div[2]/div[2]/div[1]/div[1]/table/thead/tr/th[3]/div/span/span[2]/*"
     ind_filter = f"//section/section//thead//span[span[contains(text(),'指标')]]/span[@class='filter-icon']/*"
-    sleep(2)
+    ind_filter_check = f"//section/section//thead//span[span[contains(text(),'指标')]]/span[@class='filter-icon']"
+    try:
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, ind_filter_check)))
+    except:
+        assert False, (
+            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"数据反馈页面加载失败!"
+        )
+
     ActionChains(driver).move_to_element(driver.find_element(By.XPATH, ind_filter)).pause(1).click().perform()
 
     input_ind = f"//div//input[@placeholder='请输入搜索关键字']"
