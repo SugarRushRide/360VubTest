@@ -1,13 +1,15 @@
+import math
 import os
 import re
 import shutil
 import time
 from time import sleep
-from tkinter import Image
 
 from colorama import Fore, Style
 import pytest
+from PIL import Image as PILImage
 from numexpr.necompiler import double
+from openpyxl.utils import get_column_letter
 from selenium import webdriver
 from selenium.common import NoSuchElementException
 from selenium.webdriver import Keys, ActionChains
@@ -15,6 +17,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from openpyxl import load_workbook
+from openpyxl.drawing.image import Image
 
 # 从环境变量中读取参数
 indicator = os.getenv("INDICATOR")
@@ -48,11 +51,12 @@ def save_screenshot(driver, page):
     file_path = os.path.join(screenshot_folder, file_name)
     driver.save_screenshot(file_path)
     print(f"{Fore.GREEN}截图已保存: {file_path}{Style.RESET_ALL}")
+    return file_path
 
 # 创建excel
 def create_test_excel():
     base_folder = "test excel"
-    excel_name = time.strftime("高职360数据更新测试 %Y-%m-%d")
+    excel_name = time.strftime("高职360数据更新测试 %Y-%m-%d.xlsx")
     excel_path = os.path.join(base_folder, excel_name)
 
     # 检查是否存在
@@ -68,72 +72,85 @@ def get_next_empty_row(sheet):
     row = 2
     while True:
         row_values = [sheet.cell(row = row, column = col).value for col in range(1, 24)]
-        if all(value is None or val == "" for val in row_values):
+        if all(val is None or val == "" for val in row_values):
             return row
         row += 1
 
-# 找到excel中下一个空白行的前一行（截图用）
-def get_row_for_screenshot(sheet):
+# 找到excel中下一个空白行的前一行
+def get_last_row(sheet):
     row = 2
     while True:
         row_values = [sheet.cell(row=row, column=col).value for col in range(1, 24)]
-        if all(value is None or val == "" for val in row_values):
+        if all(val is None or val == "" for val in row_values):
             return row - 1
         row += 1
 
-# 在excel中添加数据(学校用)
-def append_school_data(excel_file, school):
-    excel_workbook = load_workbook(excel_file)
+# excel表头对应的列号，返回字典
+def get_column_mapping():
+    excel_workbook = load_workbook(excel)
     sheet = excel_workbook["Sheet1"]
-    new_row = get_next_empty_row(sheet)
-    excel_file.cell(new_row, 10, school)
-    sheet.save(excel_file)
-    sheet.close()
-    return new_row
+    col_mapping = {}  # 存储表头名称 -> 列号
+    for col in range(1, sheet.max_column + 1):  # 遍历所有列
+        header = sheet.cell(row=1, column=col).value  # 读取表头
+        if header:  # 确保表头不为空
+            col_mapping[header] = col  # 记录表头对应的列号
+    return col_mapping
 
-# 在excel中添加数据(指标用)
-def append_indicator_data(excel_file, indicator_name):
-    excel_workbook = load_workbook(excel_file)
+# 在excel中添加数据(指标、变量、学校等用)
+def append_data(kind, data):
+    excel_workbook = load_workbook(excel)
     sheet = excel_workbook["Sheet1"]
-    new_row = get_next_empty_row(sheet)
-    excel_file.cell(new_row, 10, indicator_name)
-    sheet.save(excel_file)
-    sheet.close()
-    return new_row
-
-# 在excel中添加数据(变量用)
-def append_variable_data(excel_file, variable_name):
-    excel_workbook = load_workbook(excel_file)
-    sheet = excel_workbook["Sheet1"]
-    new_row = get_next_empty_row(sheet)
-    excel_file.cell(new_row, 10, variable_name)
-    sheet.save(excel_file)
-    sheet.close()
-    return new_row
-
-def append_file_data(excel_file, file_path):
-    excel_workbook = load_workbook(excel_file)
-    sheet = excel_workbook["Sheet1"]
-    new_row = get_next_empty_row(sheet)
-    excel_file.cell(new_row, 10, file_path)
-    sheet.save(excel_file)
-    sheet.close()
-    return new_row
+    if kind == "指标名称":
+        row = get_next_empty_row(sheet)
+    else:
+        row = get_last_row(sheet)
+    sheet.cell(row, column_mapping[kind], data)
+    excel_workbook.save(excel)
+    excel_workbook.close()
+    return row
 
 # 在excel中添加数据(截图用)
-def append_screenshot(excel_file, screenshot_path):
-    excel_workbook = load_workbook(excel_file)
-    sheet = excel_workbook["Sheet1"]
-    new_row = get_next_empty_row(sheet)
-    img = Image(screenshot_path)
-    img.width, img.width = 150, 100
-    sheet.add_image(img, )
+def append_screenshot(kind, screenshot_path):
+    # 固定图片大小
+    image_width = 355
+    image_height = 175
 
-# def append_data(kind, )
+    # excel长宽大小
+    excel_width = math.ceil(image_width / 7)
+    excel_height = math.ceil(image_height / 1.3)
+
+    excel_workbook = load_workbook(excel)
+    sheet = excel_workbook["Sheet1"]
+    # 先检查图片是否有效
+    try:
+        img = PILImage.open(screenshot_path)
+        img.verify()  # 验证是否为有效图片
+    except Exception as e:
+        raise ValueError(f"图片文件损坏或格式错误: {e}")
+
+    r = get_last_row(sheet)
+    col_letter = get_column_letter(column_mapping[kind])
+    cell_addr = f"{col_letter}{r}"
+
+    sheet.column_dimensions[col_letter].width = excel_width
+    sheet.row_dimensions[r].height = excel_height
+
+    img = Image(screenshot_path)
+    img.width = image_width
+    img.height = image_height
+
+    # 图片固定到单元格
+    img.anchor = cell_addr
+
+    sheet.add_image(img, cell_addr)
+    excel_workbook.save(excel)
+    excel_workbook.close()
+    return r
 
 # 创建截图、表格
 screenshot_folder = create_screenshot_folder()
 excel = create_test_excel()
+column_mapping = get_column_mapping()
 
 
 @pytest.fixture(scope="module")
@@ -406,6 +423,9 @@ def test_jump_to_target_school(driver):
         f"URL错误,跳转失败,当前 URL: {driver.current_url}"
     )
     print("成功跳转至" + school_name)
+    # 跳转至对应学校成功后, 可进行excel记录
+    row = append_data("指标名称", indicator)
+    row2 = append_data("选择学校", school_name)
 
 
 def test_data_overall(driver):
@@ -413,6 +433,7 @@ def test_data_overall(driver):
     try:
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, ind_chose)))
     except:
+        append_data("总体定位", "总体定位页面加载失败!")
         assert False, (
             f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
             f"总体定位页面加载失败!"
@@ -477,6 +498,7 @@ def test_data_overall(driver):
     elif "-" in year_on_page:
         start, end = year_on_page.split("-")
         if (year < start) or (end < year):
+            append_data("总体定位", f"数据更新年份为{year},页面年份为{data_dict_list[0]["监测年份"]},无法进行核验！")
             assert year == data_dict_list[0]["监测年份"], (
                 f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
                 f"{Fore.RED}总体定位页面核验结果" + Style.RESET_ALL + "\n"
@@ -484,6 +506,7 @@ def test_data_overall(driver):
             )
     # 监测年份与数据年份不一致
     else:
+        append_data("总体定位", f"数据更新年份为{year},页面年份为{data_dict_list[0]["监测年份"]},无法进行核验！")
         assert year == data_dict_list[0]["监测年份"], (
             f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
             f"{Fore.RED}总体定位页面核验结果" + Style.RESET_ALL + "\n"
@@ -492,15 +515,20 @@ def test_data_overall(driver):
         )
 
     # 数据核验
-    assert is_equal(value, data_dict_list[0]["指标数据"]), (
-        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-        f"{Fore.YELLOW}总体定位页面核验结果" + Style.RESET_ALL + "\n"
-        f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
-        f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
-        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-    )
+    # 若有问题, 抛出异常并计入表格
+    try:
+        assert is_equal(value, data_dict_list[0]["指标数据"]), (
+            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"{Fore.YELLOW}总体定位页面核验结果" + Style.RESET_ALL + "\n"
+            f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
+            f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
+            f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
+            f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
+            # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        )
+    except AssertionError as e:
+        append_data("总体定位", f"指标数据有误!请查找问题原因!!\n页面数据: {value_page};校对数据: {value}")
+        raise
     # print("总体定位页面" + indicator + "指标数据更新核验完毕,未发现问题")
     '''输出'''
     # 分隔线
@@ -517,7 +545,8 @@ def test_data_overall(driver):
     )
     # 分隔线
     print(Fore.BLUE + "=" * 80 + Style.RESET_ALL)
-    save_screenshot(driver, "总体定位")
+    path = save_screenshot(driver, "总体定位")
+    append_screenshot("总体定位", path)
 
 # 全部指标页面数据核验
 def test_data_all_ind(driver):
@@ -528,6 +557,7 @@ def test_data_all_ind(driver):
     try:
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, all_ind)))
     except:
+        append_data("全部指标", "全部指标页面加载失败!")
         assert False, (
             f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
             f"全部指标页面加载失败!"
@@ -601,15 +631,19 @@ def test_data_all_ind(driver):
     print(data_dict)
 
     # 数据核验
-    assert is_equal(value, data_dict[school_name]), (
-        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-        f"{Fore.YELLOW}全部指标页面" + Style.RESET_ALL + "\n"
-        f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
-        f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
-        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-    )
+    try:
+        assert is_equal(value, data_dict[school_name]), (
+            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"{Fore.YELLOW}全部指标页面" + Style.RESET_ALL + "\n"
+            f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
+            f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
+            f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
+            f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
+            # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        )
+    except AssertionError as e:
+        append_data("全部指标", f"指标数据有误!请查找问题原因!!\n页面数据: {value_page};校对数据: {value}")
+        raise
     # print("全部指标页面" + indicator + "指标数据更新核验完毕,页面数据为:" + str(data_dict[school_name]) + ",校对数据为:" + value + ",未发现问题~")
     '''输出'''
     # 分隔线
@@ -624,7 +658,8 @@ def test_data_all_ind(driver):
     )
     # 分隔线
     print(Fore.BLUE + "=" * 80 + Style.RESET_ALL)
-    save_screenshot(driver, "全部指标")
+    path = save_screenshot(driver, "全部指标")
+    append_screenshot("全部指标", path)
 
 
 # 指标查看页面数据核验
@@ -636,6 +671,7 @@ def test_data_ind_check(driver):
     try:
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, ind_check)))
     except:
+        append_data("指标查看页面加载失败!")
         assert False, (
             f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
             f"指标查看页面加载失败!"
@@ -689,21 +725,31 @@ def test_data_ind_check(driver):
     print(data_dict)
 
     # 核验数据正确性
-    assert year in data_dict, (
-        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-        f"{Fore.YELLOW}指标查看页面核验结果" + Style.RESET_ALL + "\n"
-        f"{Fore.RED}状态: {Fore.RED}✖ 发现问题!未找到数据项,是否未更新?{Style.RESET_ALL}\n"
-        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-    )
-    assert is_equal(value, data_dict[year]), (
-        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-        f"{Fore.YELLOW}指标查看页面核验结果" + Style.RESET_ALL + "\n"
-        f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
-        f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
-        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-    )
+    try:
+        assert year in data_dict, (
+            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"{Fore.YELLOW}指标查看页面核验结果" + Style.RESET_ALL + "\n"
+            f"{Fore.RED}状态: {Fore.RED}✖ 发现问题!未找到数据项,是否未更新?{Style.RESET_ALL}\n"
+            # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        )
+    except AssertionError as e:
+        append_data("指标查看", f"发现问题!未找到数据项,是否未更新?")
+        raise
+
+    try:
+        assert is_equal(value, data_dict[year]), (
+            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"{Fore.YELLOW}指标查看页面核验结果" + Style.RESET_ALL + "\n"
+            f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
+            f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
+            f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
+            f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
+            # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        )
+    except AssertionError as e:
+        append_data("指标查看", f"指标数据有误!请查找问题原因!!\n页面数据: {value_page};校对数据: {value}")
+        raise
+
     # print("指标查看页面" + indicator + "指标数据更新核验完毕,页面数据为:" + str(data_dict[year]) + ",校对数据为:" + value + ",未发现问题~")
     '''输出'''
     # 分隔线
@@ -718,7 +764,8 @@ def test_data_ind_check(driver):
     )
     # 分隔线
     print(Fore.BLUE + "=" * 80 + Style.RESET_ALL)
-    save_screenshot(driver, "指标查看")
+    path = save_screenshot(driver, "指标查看")
+    append_screenshot("指标查看", path)
 
 
 # 数据反馈页面数据核验
@@ -735,6 +782,7 @@ def test_data_feedback(driver):
     try:
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, ind_filter_check)))
     except:
+        append_data("数据反馈", "数据反馈页面加载失败!")
         assert False, (
             f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
             f"数据反馈页面加载失败!"
@@ -791,15 +839,20 @@ def test_data_feedback(driver):
     print(data_dict)
 
     # 总页面数据核验
-    assert is_equal(value, data_dict["数据"]),  (
-        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-        f"{Fore.YELLOW}数据反馈页面" + Style.RESET_ALL + "\n"
-        f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
-        f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
-        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL
-    )
+    try:
+        assert is_equal(value, data_dict["数据"]),  (
+            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"{Fore.YELLOW}数据反馈页面" + Style.RESET_ALL + "\n"
+            f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
+            f"{Fore.GREEN}页面数据: {Fore.CYAN}{value_page}{Style.RESET_ALL}\n"
+            f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
+            f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
+            # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL
+        )
+    except AssertionError as e:
+        append_data("数据反馈", f"指标数据有误!请查找问题原因!!\n页面数据: {value_page};校对数据: {value}")
+        raise
+
     # print("数据反馈页面" + indicator + "指标数据更新核验完毕,页面数据为:" + str(data_dict["监测年份"]) + ",校对数据为:" + value + ",未发现问题~")
     '''输出'''
     # 分隔线
@@ -814,13 +867,14 @@ def test_data_feedback(driver):
     )
     # 分隔线
     print(Fore.BLUE + "=" * 80 + Style.RESET_ALL)
-    save_screenshot(driver, "数据反馈")
+    # save_screenshot(driver, "数据反馈")
 
     '''
         待完善数据反馈、明细反馈逻辑
     '''
     if "截至" in year:
-        assert 1 < 0, f"明细反馈待完善"
+        append_data("数据反馈", f"明细反馈待完善")
+        assert False, f"明细反馈待完善"
 
     # 数据反馈操作页面数据核验
     if flag == 0:
@@ -849,15 +903,19 @@ def test_data_feedback(driver):
         data_dict_2["当前数据"] = 0
 
     print(data_dict_2)  # 输出字典
-    assert is_equal(value, data_dict_2["当前数据"]), (
-        f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-        f"{Fore.YELLOW}数据反馈页面核验结果" + Style.RESET_ALL + "\n"
-        f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}页面数据: {Fore.CYAN}{data_dict_2['当前数据']}{Style.RESET_ALL}\n"
-        f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
-        f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
-        # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
-    )
+    try:
+        assert is_equal(value, data_dict_2["当前数据"]), (
+            f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+            f"{Fore.YELLOW}数据反馈页面核验结果" + Style.RESET_ALL + "\n"
+            f"{Fore.GREEN}指标: {Fore.YELLOW}{indicator}{Style.RESET_ALL}\n"
+            f"{Fore.GREEN}页面数据: {Fore.CYAN}{data_dict_2['当前数据']}{Style.RESET_ALL}\n"
+            f"{Fore.GREEN}校对数据: {Fore.CYAN}{value}{Style.RESET_ALL}\n"
+            f"{Fore.RED}状态: {Fore.RED}✖ 指标数据有误!请查找问题原因!!{Style.RESET_ALL}\n"
+            # f"{Fore.BLUE}=" * 80 + Style.RESET_ALL + "\n"
+        )
+    except AssertionError as e:
+        append_data("数据反馈", f"指标数据有误!请查找问题原因!!\n页面数据: {value_page};校对数据: {value}")
+        raise
     # print("数据反馈页面" + indicator + "指标数据更新核验完毕,页面数据为:" + str(data_dict_2[
     #     "当前数据"]) + ",校对数据为:" + value + ",未发现问题~")
 
@@ -873,4 +931,5 @@ def test_data_feedback(driver):
     )
     # 分隔线
     print(Fore.BLUE + "=" * 80 + Style.RESET_ALL)
-    save_screenshot(driver, "数据反馈页面核验结果")
+    path = save_screenshot(driver, "数据反馈")
+    append_screenshot("数据反馈", path)
